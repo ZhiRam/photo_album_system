@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>智能相册-核心原型</title>
+    <style>
+        body {max-width: 900px; margin: 50px auto; text-align: center; font-family: Arial;}
+        .upload-box {padding: 30px; border: 2px dashed #aaa; margin: 20px 0; border-radius: 8px;}
+        button {padding: 10px 20px; font-size: 16px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; margin: 5px;}
+        input[type="file"] {font-size: 16px; margin: 10px 0;}
+        .msg {color: #dc3545; font-size: 18px; margin: 10px 0;}
+        .image-list {margin-top: 30px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px;}
+        .image-card {border: 1px solid #ddd; padding: 10px; border-radius: 8px;}
+        .image-card img {width: 100%; height: 150px; object-fit: cover; border-radius: 4px;}
+        .tag {display: inline-block; background: #e3f2fd; color: #0277bd; padding: 3px 8px; border-radius: 4px; margin: 5px 3px; font-size: 14px;}
+    </style>
+</head>
+<body>
+    <h1>雏雁计划-智能相册（核心原型）</h1>
+    <div class="upload-box">
+        <h3>上传图片（自动生成特征标签）</h3>
+        <input type="file" id="fileInput" accept="image/*">
+        <button onclick="uploadImage()">上传并识别</button>
+    </div>
+    <p class="msg" id="msg"></p>
+    <div class="image-list" id="imageList"></div>
+
+    <script>
+        // 上传图片并获取标签
+        async function uploadImage() {
+            const fileInput = document.getElementById('fileInput');
+            const msg = document.getElementById('msg');
+            const imageList = document.getElementById('imageList');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                msg.innerText = '请先选择要上传的图片！';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            msg.innerText = '正在上传并提取特征标签，请稍等...';
+
+            try {
+                const res = await fetch('/api/upload', {method: 'POST', body: formData});
+                const data = await res.json();
+                msg.innerText = data.msg;
+
+                if (data.code === 200) {
+                    // 渲染新上传的图片卡片
+                    renderImageCard(data.data, imageList);
+                    fileInput.value = ''; // 清空文件选择框
+                }
+            } catch (e) {
+                msg.innerText = '上传失败，请重试！';
+                console.error(e);
+            }
+        }
+
+        // 渲染图片卡片（含标签）
+        function renderImageCard(imgData, container) {
+            const card = document.createElement('div');
+            card.className = 'image-card';
+            // 拼接标签
+            const tagHtml = (imgData.ai_tags || imgData.tags).map(tag => `<span class="tag">${tag}</span>`).join('');
+            // 卡片内容
+            card.innerHTML = `
+                <img src="${imgData.img_path || imgData.url}" alt="${imgData.img_name || imgData.name}">
+                <p style="font-size: 14px; margin: 10px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${imgData.img_name || imgData.name}</p>
+                <div><small>特征标签：${tagHtml}</small></div>
+            `;
+            // 新卡片放在最前面
+            container.prepend(card);
+        }
+
+        // 页面加载时，获取所有已上传图片
+        window.onload = async function() {
+            const res = await fetch('/api/images');
+            const data = await res.json();
+            if (data.code === 200 && data.data.length > 0) {
+                const imageList = document.getElementById('imageList');
+                data.data.forEach(img => renderImageCard(img, imageList));
+            }
+        }
+    </script>
+</body>
+</html>
